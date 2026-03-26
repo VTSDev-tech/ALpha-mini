@@ -183,8 +183,6 @@ async def demo_dance():
     print("\n=== NHẢY MÚA ===")
     dances = [
         ("dance_0004en", "Little Star"),
-        ("dance_0006en", "Seaweed Dance"),
-        ("dance_0009en", "Learn to Meow"),
     ]
     for name, label in dances:
         print(f"  → {label}")
@@ -254,14 +252,7 @@ async def demo_object():
     else:
         print(f"     Lỗi: {resp.resultCode}")
 
-# ═══════════════════════════════════════════════
-# 6. KẾT HỢP NÓI + BIỂU CẢM + ACTION
-#    Cần: pip install gtts + python file_server.py
-#    Quy trình mỗi màn:
-#      set_expression (không cần StartRunProgram)
-#      → StartRunProgram → noi() + action
-#      → reconnect() để reset cho màn tiếp theo
-# ═══════════════════════════════════════════════
+
 async def demo_ket_hop():
     print("\n=== KẾT HỢP NÓI + BIỂU CẢM + ACTION ===")
 

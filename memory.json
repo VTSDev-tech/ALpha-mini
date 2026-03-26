@@ -1,0 +1,81 @@
+{
+  "bạn": [
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:33"
+    },
+    {
+      "noi_dung": "Bạn hỏi: lấy 4 x 12",
+      "thoi_gian": "2026-03-26 14:34"
+    },
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:34"
+    },
+    {
+      "noi_dung": "Bạn hỏi: công thức",
+      "thoi_gian": "2026-03-26 14:34"
+    },
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:34"
+    },
+    {
+      "noi_dung": "Bạn hỏi: gửi lời chúc mừng",
+      "thoi_gian": "2026-03-26 14:35"
+    },
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:35"
+    },
+    {
+      "noi_dung": "Bạn hỏi: Xin chào",
+      "thoi_gian": "2026-03-26 14:36"
+    },
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:36"
+    },
+    {
+      "noi_dung": "Bạn hỏi: cửa gỗ",
+      "thoi_gian": "2026-03-26 14:36"
+    },
+    {
+      "noi_dung": "Robot trả lời: Não bộ đang bận, đợi mình tí nhé.",
+      "thoi_gian": "2026-03-26 14:36"
+    },
+    {
+      "noi_dung": "Bạn hỏi: Xin chào",
+      "thoi_gian": "2026-03-26 14:53"
+    },
+    {
+      "noi_dung": "Robot trả lời: Chào bạn! AlphaMini rất vui được trò chuyện cùng bạn đó.",
+      "thoi_gian": "2026-03-26 14:53"
+    },
+    {
+      "noi_dung": "Bạn hỏi: giá nhựa giả gỗ",
+      "thoi_gian": "2026-03-26 14:55"
+    },
+    {
+      "noi_dung": "Robot trả lời: À, về giá nhựa giả gỗ thì AlphaMini chưa có thông tin cụ thể đâu bạn ạ. Bạn thử tìm trên mạng hoặc hỏi ở các cửa hàng xem sao nhé!",
+      "thoi_gian": "2026-03-26 14:55"
+    }
+  ],
+  "người lạ": [
+    {
+      "role": "user",
+      "content": "tên tôi tên là Tuấn Anh",
+      "time": "10:17:55"
+    },
+    {
+      "role": "robot",
+      "content": "Kết nối mạng hơi yếu, mình đang khởi động lại tư duy một chút.",
+      "time": "10:18:23"
+    },
+    {
+      "role": "user",
+      "content": "Tôi tên là Gia Huy",
+      "time": "10:23:16"
+    }
+  ]
+}
