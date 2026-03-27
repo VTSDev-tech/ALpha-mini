@@ -9,15 +9,19 @@ import requests
 import speech_recognition as sr
 from datetime import datetime
 import mini.mini_sdk as MiniSdk
+
+# Import đầy đủ các API cần dùng
 from mini.apis.api_setup import StartRunProgram
 from mini.apis.api_action import PlayAction
 from mini.apis.api_expression import PlayExpression
 from mini.apis.api_sound import PlayAudio, ChangeRobotVolume
+from mini.apis.api_behavior import StartBehavior, StopBehavior
 from mini.apis.api_sence import FaceRecognise
 from mini.apis import AudioStorageType
 
-# === Thêm SDK Gemini mới ===
+# Gemini SDK
 from google import genai
+from google.genai.types import GenerateContentConfig
 
 # ══════════════════════════════════════════════════════════════════════
 # CẤU HÌNH — Chỉ thay đổi ở đây
@@ -27,32 +31,25 @@ TTS_DIR     = r"D:\alphamini\tts_cache"
 MEMORY_FILE = r"D:\alphamini\memory.json"
 LANGUAGE    = "vi-VN"
 
-# Nhiều API key để tránh quota
 GEMINI_KEYS = [
-    "AIzaSyDxgCJEhJ15RyEHEjFH0Q5LUHZIVyZBueM",
-    "AIzaSyDCZT_AL0JSWGeSOnsuT4n7kVEB26BHwfU",
-    # Thêm key khác vào đây nếu có
+    "AIzaSyAhkBxrI8UN7dHt41-yb7eUNlI8un9nKk8",
+    "AIzaSyAWTnL1FLz8ab48qgABbkmX5V7s0mEI3fc",
+    # Thêm nhiều key nếu cần
 ]
 
-# Danh sách model (ưu tiên model mới và mạnh)
 MODELS = [
-    "gemini-2.5-flash",          # Model tốt nhất hiện tại (khuyến nghị)
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash-8b",
 ]
 
-# ══════════════════════════════════════════════════════════════════════
-# SETUP
-# ══════════════════════════════════════════════════════════════════════
+# Trạng thái xoay key/model
+state = {"key_idx": 0, "model_idx": 0}
+
 logging.basicConfig(level=logging.WARNING)
 MiniSdk.set_log_level(logging.WARNING)
 MiniSdk.set_robot_type(MiniSdk.RobotType.EDU)
 os.makedirs(TTS_DIR, exist_ok=True)
-
-# Trạng thái xoay key và model
-state = {"key_idx": 0, "model_idx": 0}
 
 # ══════════════════════════════════════════════════════════════════════
 # MEMORY — File JSON
@@ -74,7 +71,7 @@ def luu_ky_uc(ten_nguoi: str, noi_dung: str):
         "noi_dung": noi_dung,
         "thoi_gian": datetime.now().strftime("%Y-%m-%d %H:%M")
     })
-    memory[ten_nguoi] = memory[ten_nguoi][-15:]
+    memory[ten_nguoi] = memory[ten_nguoi][-10:]
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
 
@@ -82,33 +79,22 @@ def lay_ky_uc(ten_nguoi: str) -> str:
     memory = doc_memory()
     if ten_nguoi not in memory:
         return ""
-    return "\n".join([k["noi_dung"] for k in memory[ten_nguoi][-8:]])
+    return "\n".join([k["noi_dung"] for k in memory[ten_nguoi][-4:]])
 
 # ══════════════════════════════════════════════════════════════════════
-# AI — Gemini với Google GenAI SDK + Key Rotation + Model Fallback
+# AI — Gemini
 # ══════════════════════════════════════════════════════════════════════
-SYSTEM_PROMPT = """Bạn là AlphaMini — robot humanoid nhỏ đáng yêu, thông minh, thân thiện tại Việt Nam.
+SYSTEM_PROMPT = """Bạn là AlphaMini — robot nhỏ đáng yêu, thông minh, thân thiện tại Việt Nam.
 Trả lời bằng tiếng Việt, ngắn gọn 1-2 câu, tự nhiên như đang nói chuyện thật.
 
-Cuối mỗi câu trả lời, LUÔN thêm đúng 1 dòng JSON (không dùng markdown, không xuống dòng thêm):
+Cuối mỗi câu trả lời, LUÔN thêm đúng 1 dòng JSON:
 EMOTION:{"cam_xuc":"TEN","action":"TEN"}
 
-cam_xuc (chọn 1 phù hợp nhất):
-  codemao10=hứng khởi/vui vẻ, codemao13=thắc mắc/tò mò, codemao17=chán nản
-  codemao19=yêu thích/dễ thương, emo_007=mỉm cười bình thường
-  emo_008=bực bội, emo_013=tức giận, emo_016=cười tươi rạng rỡ, emo_027=cool/ngầu
-
-action (chọn 1 hoặc để trống):
-  011=gật đầu, 015=chào đón, 010=cười, 037=lắc đầu
-  017=giơ tay, action_016=tạm biệt, ""=không action
-
-Ví dụ:
-Ồ hay quá! Mình chưa biết điều đó bao giờ.
-EMOTION:{"cam_xuc":"codemao10","action":"017"}"""
+cam_xuc: codemao10(vui), codemao13(tò mò), codemao19(dễ thương), emo_007(bình thường), emo_016(cười), emo_027(cool)
+action: 011(gật đầu), 015(chào), 017(giơ tay), 037(lắc đầu), "" """
 
 def _goi_gemini_sync(prompt: str) -> dict | None:
-    """Gọi Gemini qua SDK chính thức, tự động xoay key và model khi quota hết"""
-    total_attempts = len(GEMINI_KEYS) * len(MODELS)
+    total_attempts = len(GEMINI_KEYS) * len(MODELS) * 2
 
     for _ in range(total_attempts):
         current_key = GEMINI_KEYS[state["key_idx"] % len(GEMINI_KEYS)]
@@ -116,42 +102,41 @@ def _goi_gemini_sync(prompt: str) -> dict | None:
 
         try:
             client = genai.Client(api_key=current_key)
+            config = GenerateContentConfig(
+                temperature=0.8,
+                max_output_tokens=220,
+            )
 
             response = client.models.generate_content(
                 model=current_model,
-                contents=prompt
+                contents=prompt,
+                config=config
             )
 
-            # Trả về dạng dict giống format cũ để không phải sửa phần parse
+            print(f"  ✅ Thành công với model: {current_model}")
             return {
                 "candidates": [{
-                    "content": {
-                        "parts": [{"text": response.text}]
-                    }
+                    "content": {"parts": [{"text": response.text}]}
                 }]
             }
 
         except Exception as e:
             error_msg = str(e).lower()
-
-            # Xử lý quota hết (429 hoặc ResourceExhausted)
-            if "429" in error_msg or "quota" in error_msg or "resourceexhausted" in error_msg:
+            if "403" in error_msg and ("leaked" in error_msg or "permission_denied" in error_msg):
+                print(f"  ❌ KEY BỊ LEAKED → Chuyển key ngay!")
                 state["key_idx"] += 1
-                if state["key_idx"] % len(GEMINI_KEYS) == 0:
-                    state["model_idx"] += 1
-                    next_model = MODELS[state["model_idx"] % len(MODELS)]
-                    print(f"  ⚠ Hết quota tất cả key → chuyển model: {next_model}")
-                else:
-                    next_key_num = (state["key_idx"] % len(GEMINI_KEYS)) + 1
-                    print(f"  ⚠ Key {current_key[:10]}... hết quota → thử key {next_key_num}")
-                continue
-
+            elif "429" in error_msg or "quota" in error_msg:
+                print(f"  ⚠ Hết quota → chuyển key/model")
+                state["key_idx"] += 1
             else:
                 print(f"  ⚠ Lỗi với model {current_model}: {str(e)[:120]}")
                 state["model_idx"] += 1
-                continue
 
-    print("  ❌ Tất cả key và model đều không hoạt động được.")
+            if state["key_idx"] % len(GEMINI_KEYS) == 0:
+                state["model_idx"] += 1
+            continue
+
+    print("  ❌ Tất cả key/model không hoạt động")
     return None
 
 
@@ -163,7 +148,7 @@ async def hoi_ai(cau_hoi: str, ten_nguoi: str) -> tuple:
     data = await asyncio.to_thread(_goi_gemini_sync, prompt)
 
     if data is None:
-        return "Não bộ đang bận, đợi mình tí nhé.", {"cam_xuc": "codemao13", "action": ""}
+        return "Não bộ đang bận, đợi mình tí nhé!", {"cam_xuc": "codemao13", "action": ""}
 
     try:
         full_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -172,13 +157,10 @@ async def hoi_ai(cau_hoi: str, ten_nguoi: str) -> tuple:
 
         if "EMOTION:" in full_text:
             try:
-                emotion_str = full_text.split("EMOTION:")[1].strip()
-                emotion = json.loads(emotion_str)
+                emotion = json.loads(full_text.split("EMOTION:")[1].strip())
             except:
                 pass
-
         return tra_loi, emotion
-
     except Exception as e:
         print(f"  Parse lỗi: {e}")
         return "Mình không hiểu lắm, bạn nói lại được không?", {"cam_xuc": "codemao13", "action": "037"}
@@ -208,7 +190,6 @@ async def nghe_mic() -> str:
             except Exception as e:
                 print(f"  STT lỗi: {e}")
                 return ""
-
     return await asyncio.to_thread(_listen)
 
 
@@ -250,7 +231,7 @@ async def robot_noi(text: str):
         ).execute()
 
         if resp.isSuccess:
-            await asyncio.sleep(max(2.0, len(text) * 0.11))
+            await asyncio.sleep(max(1.8, len(text) * 0.10))
         else:
             print(f"     (Audio lỗi code={resp.resultCode})")
 
@@ -270,17 +251,81 @@ async def set_expression(name: str):
 
 
 # ══════════════════════════════════════════════════════════════════════
-# VÒNG LẶP CHAT
+# XỬ LÝ LỆNH ĐẶC BIỆT (Nhảy, Biểu cảm, Di chuyển...)
+# ══════════════════════════════════════════════════════════════════════
+async def xu_ly_lenh_dac_biet(cau_hoi: str) -> bool:
+    text = cau_hoi.lower().strip()
+
+    # Nhảy múa
+    if any(k in text for k in ["nhảy", "múa", "dance", "nhảy đi", "múa cho xem", "nhảy một bài", "nhảy múa"]):
+        await set_expression("codemao10")
+        await robot_noi("Được rồi! Mình nhảy cho bạn xem nè!")
+        await StartRunProgram().execute()
+        await asyncio.sleep(3)
+        await StartBehavior(name="dance_0004en").execute()   # Little Star
+        await asyncio.sleep(10)
+        await StopBehavior().execute()
+        await robot_noi("Nhảy xong rồi! Bạn thấy sao?")
+        return True
+
+    # Biểu cảm vui - cười
+    if any(k in text for k in ["cười", "vui", "hạnh phúc", "smile", "cười đi"]):
+        await set_expression("emo_016")
+        await robot_noi("Hehe, mình cười tươi đây!")
+        return True
+
+    # Biểu cảm ngầu / cool
+    if any(k in text for k in ["ngầu", "cool", "kính đen", "cool ngầu"]):
+        await set_expression("emo_027")
+        await robot_noi("Mình ngầu lắm nè!")
+        return True
+
+    # Biểu cảm dễ thương / yêu
+    if any(k in text for k in ["yêu", "dễ thương", "thương bạn"]):
+        await set_expression("codemao19")
+        await robot_noi("Mình yêu bạn lắm luôn á!")
+        return True
+
+    # Tiến tới
+    if any(k in text for k in ["tiến", "đi tới", "đi lên", "tiến lên"]):
+        await robot_noi("Mình tiến lên nè!")
+        await StartRunProgram().execute()
+        await asyncio.sleep(2)
+        await PlayAction(action_name="015").execute()   # chào đón
+        return True
+
+    # Lùi lại
+    if any(k in text for k in ["lùi", "đi lui", "lùi lại"]):
+        await robot_noi("Mình lùi lại đây!")
+        await StartRunProgram().execute()
+        await asyncio.sleep(2)
+        await PlayAction(action_name="037").execute()   # lắc đầu
+        return True
+
+    # Vẫy tay / chào
+    if any(k in text for k in ["vẫy tay", "chào tay", "giơ tay"]):
+        await set_expression("emo_007")
+        await robot_noi("Chào bạn nè!")
+        await PlayAction(action_name="017").execute()
+        return True
+
+    return False
+
+
+# ══════════════════════════════════════════════════════════════════════
+# VÒNG LẶP CHAT — ĐÃ BỔ SUNG LỆNH ĐẶC BIỆT
 # ══════════════════════════════════════════════════════════════════════
 async def vong_lap_chat(ten_nguoi: str):
     print(f"\n  ✨ Sẵn sàng trò chuyện cùng {ten_nguoi}!")
-    print("  Nói 'thoát' hoặc 'tạm biệt' để dừng\n")
+    print("  Nói 'thoát' hoặc 'tạm biệt' để dừng")
+    print("  Bạn có thể ra lệnh: nhảy đi, múa đi, cười, ngầu, yêu, tiến, lùi, vẫy tay...\n")
 
     while True:
         cau_hoi = await nghe_mic()
         if not cau_hoi:
             continue
 
+        # Lệnh thoát
         if any(k in cau_hoi.lower() for k in ["thoát", "tạm biệt", "dừng", "bye", "kết thúc"]):
             await set_expression("codemao19")
             await robot_noi(f"Tạm biệt {ten_nguoi}! Hẹn gặp lại nhé.")
@@ -288,6 +333,12 @@ async def vong_lap_chat(ten_nguoi: str):
             luu_ky_uc(ten_nguoi, f"Kết thúc lúc {datetime.now().strftime('%H:%M')}")
             break
 
+        # Xử lý lệnh đặc biệt trước
+        if await xu_ly_lenh_dac_biet(cau_hoi):
+            luu_ky_uc(ten_nguoi, f"Lệnh đặc biệt: {cau_hoi}")
+            continue
+
+        # Chat bình thường với AI
         luu_ky_uc(ten_nguoi, f"Bạn hỏi: {cau_hoi}")
 
         print("  💭 Đang suy nghĩ...")
@@ -295,15 +346,15 @@ async def vong_lap_chat(ten_nguoi: str):
         luu_ky_uc(ten_nguoi, f"Robot trả lời: {tra_loi}")
 
         await set_expression(emotion.get("cam_xuc", "emo_007"))
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
         action = emotion.get("action", "")
         if action:
             await PlayAction(action_name=action).execute()
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.0)
 
         await robot_noi(tra_loi)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -313,16 +364,15 @@ async def main():
     print("  📡 Đang tìm kiếm Alpha Mini...")
     device = await MiniSdk.get_device_by_name(SERIAL, timeout=10)
     if not device:
-        print("  ❌ Không thấy robot. Kiểm tra WiFi!"); return
+        print("  ❌ Không thấy robot. Kiểm tra WiFi!")
+        return
 
     await MiniSdk.connect(device)
     print(f"  ✅ Đã kết nối: {device.name} @ {device.address}")
 
-    # 1. Âm lượng
     await ChangeRobotVolume(volume=1.0).execute()
     await asyncio.sleep(1)
 
-    # 2. Nhận diện khuôn mặt
     print("  🔍 Đang nhận diện khuôn mặt...")
     (_, resp) = await FaceRecognise(timeout=5).execute()
     ten = "bạn"
@@ -331,20 +381,16 @@ async def main():
         ten = name if name != "stranger" else "bạn"
     print(f"  👤 Xin chào: {ten}")
 
-    # 3. Biểu cảm chào
     await set_expression("emo_016")
     await asyncio.sleep(1)
 
-    # 4. StartRunProgram
     await StartRunProgram().execute()
-    await asyncio.sleep(6)
+    await asyncio.sleep(5)
 
-    # 5. Chào mừng
-    await robot_noi(f"Chào {ten}! Mình là Alpha Mini, sẵn sàng trò chuyện rồi!")
+    await robot_noi(f"Chào {ten}! Mình là Alpha Mini, sẵn sàng trò chuyện và biểu diễn rồi!")
     await PlayAction(action_name="015").execute()
-    await asyncio.sleep(3)
+    await asyncio.sleep(2)
 
-    # 6. Vào vòng chat
     try:
         await vong_lap_chat(ten)
     except KeyboardInterrupt:
